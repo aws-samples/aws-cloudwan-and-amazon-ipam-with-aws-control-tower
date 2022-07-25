@@ -29,10 +29,12 @@ The deployment of the solution consists of three sections:
 
 Please refer to [blog](https://aws.amazon.com/blogs/networking-and-content-delivery/ip-address-management-for-aws-control-tower/) for further details.
 
-A special call out to [Rasika Mantri](https://www.linkedin.com/in/rasikamantri/) for contributing IPAM modules that are leveraged in this post. 
 
 ## Author 
 Shiva Vaidyanthan - Sr.Cloud Infrastructure Architect - vaidys@amazon.com
+
+A special call out to [Rasika Mantri](https://www.linkedin.com/in/rasikamantri/) for contributing IPAM modules that are leveraged in this post. 
+
 
 ## Security
 
