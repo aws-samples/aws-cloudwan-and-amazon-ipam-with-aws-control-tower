@@ -8,6 +8,18 @@
       "ParameterValue": "/org/member/local/vpcid"
     },
     {
+      "ParameterKey": "pDevOrganizationOU",
+      "ParameterValue": "$[alfred_ssm_/org/core/DevelopmentOU]"
+    },
+    {
+      "ParameterKey": "pProdOrganizationOU",
+      "ParameterValue": "$[alfred_ssm_/org/core/ProductionOU]"
+    },
+    {
+      "ParameterKey": "pSharedservicesOrganizationOU",
+      "ParameterValue": "$[alfred_ssm_/org/core/SharedServicesOU]"
+    },
+    {
       "ParameterKey": "pManagementAccountID",
       "ParameterValue": "$[alfred_ssm_/org/core/ManagementAccountId]"
     },
