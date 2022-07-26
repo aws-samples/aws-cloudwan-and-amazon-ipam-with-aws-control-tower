@@ -1,0 +1,81 @@
+#Default region for deploying Custom Control Tower: Code Pipeline, Step functions, Lambda, SSM parameters, and StackSets
+region: us-east-1
+version: 2021-03-15
+  
+# Control Tower Custom CloudFormation Resources
+resources:
+  - name: vpc-automation-in-networking-hub 
+    resource_file: templates/vpc-automation-in-networking-hub.yml
+    parameter_file: parameters/vpc-automation-in-networking-hub.json 
+    deploy_method: stack_set
+    deployment_targets:
+      accounts:
+        - NetworkHub
+    export_outputs: 
+      - name: /org/sharedservice/networking/LocalVPCIdPath
+        value: $[output_oLocalParameterPathforVPCID]
+      - name: /org/sharedservice/networking/CoreNetworkId
+        value: $[output_oCoreNetworkId]
+      - name: /org/sharedservice/networking/CoreNetworkArn
+        value: $[output_oCoreNetworkArn]
+    regions:
+      - us-east-1
+
+  - name: ipam-delegate
+    resource_file: templates/ipam-delegate.yml
+    parameter_file: parameters/ipam-delegate.json 
+    deploy_method: stack_set
+    deployment_targets:
+      accounts:
+        - CloudWAN GA
+    regions:
+      - us-east-1
+
+  - name: ipam-networking-hub
+    resource_file: templates/ipam-networking-hub.yml
+    parameter_file: parameters/ipam-networking-hub.json 
+    deploy_method: stack_set
+    deployment_targets:
+      accounts:
+        - NetworkHub
+    export_outputs: 
+      - name: /org/sharedservice/networking/LocalVPCIdPath
+        value: $[output_oLocalParameterPathforVPCID]
+      - name: /org/sharedservice/networking/IPPoolProductionIPv4Region1
+        value: $[output_oIPPoolProductionIPv4Region1]
+      - name: /org/sharedservice/networking/IPPoolDevelopmentIPv4Region1
+        value: $[output_oIPPoolDevelopmentIPv4Region1]
+      - name: /org/sharedservice/networking/IPPoolSharedServicesIPv4Region1
+        value: $[output_oIPPoolSharedServicesIPv4Region1]
+      - name: /org/sharedservice/networking/IPPoolProductionIPv4Region2
+        value: $[output_oIPPoolProductionIPv4Region2]
+      - name: /org/sharedservice/networking/IPPoolDevelopmentIPv4Region2
+        value: $[output_oIPPoolDevelopmentIPv4Region2]
+      - name: /org/sharedservice/networking/IPPoolSharedServicesIPv4Region2
+        value: $[output_oIPPoolSharedServicesIPv4Region2]
+    regions:
+      - us-east-1
+
+  - name: vpc-remote-cidr
+    resource_file: templates/remote_cidr.yml
+    parameter_file: parameters/remote_cidr.json
+    deploy_method: stack_set
+    deployment_targets:
+      accounts:
+        - NetworkHub
+    regions:
+      - us-east-1
+      - eu-west-1
+
+  - name: vpc-automation-in-spoke-development
+    resource_file: templates/vpc-automation-in-spoke.yml
+    parameter_file: parameters/vpc-automation-in-spoke.json
+    deploy_method: stack_set
+    deployment_targets:
+      organizational_units:
+        - Development
+        - Production
+        - SharedServices
+    regions:
+      - eu-west-1
+      - us-east-1
