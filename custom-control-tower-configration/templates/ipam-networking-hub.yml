@@ -1,0 +1,344 @@
+########################################################################################################################
+#  Any code, applications, scripts, templates, proofs of concept, documentation and other items provided by AWS under  #
+#  this SOW are "AWS Content," as defined in the Agreement, and are provided for illustration purposes only. All such  #
+#  AWS Content is provided solely at the option of AWS, and is subject to the terms of the Addendum and the Agreement. #
+#  Customer is solely responsible for using, deploying, testing, and supporting any code and applications provided by  #
+#  AWS under this SOW.                                                                                                 #
+########################################################################################################################
+# Copyright 2016-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
+# 
+# http://aws.amazon.com/apache2.0/
+# 
+# or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+Parameters:
+  pOrgId:
+    Description: Id of organization
+    Type: String
+  pDevOrganizationOU:
+    Description: AWS Organization ID
+    Type: String
+  pProdOrganizationOU:
+    Description: AWS Organization ID
+    Type: String
+  pSharedservicesOrganizationOU:
+    Description: AWS Organization ID
+    Type: String
+  pLocalParameterPathforVPCID:
+    Type: String
+    Description: SSM Parameter Name for storing VPCID locally in the account
+    Default: '/org/member/local/vpcid'
+  pManagementAccountID:
+    Description: Management Account ID
+    Type: String
+  pOperatingRegionList: 
+    Description: A list of AWS Regions where the IPAM is allowed to manage IP address CIDRs
+    Type: List<String>     
+  pMainPoolCIDRIPv4List:
+    Description: The list of CIDRs provisioned to the main IPAM pool. 
+    Type: List<String>
+  pRegionalPool1CIDRIPv4List:
+    Description: The list of CIDRs provisioned to the Main IPAM pool 1. 
+    Type: List<String> 
+  # pRegionalPool2CIDRIPv4List:
+  #   Description: The list of CIDRs provisioned to the Main IPAM pool 2. 
+  #   Type: List<String> 
+  pProductionPoolCIDRIPv4List:
+    Description: The list of CIDRs provisioned to the Production IPAM pool. 
+    Type: List<String> 
+  pDevelopmentPoolCIDRIPv4List:
+    Description: The list of CIDRs provisioned to the Development IPAM pool. 
+    Type: List<String>   
+  pSharedServicesPoolCIDRIPv4List:
+    Description: The list of CIDRs provisioned to the Staging IPAM pool. 
+    Type: List<String>     
+  # pDefaultNetmaskLengthIPv4: 
+  #   Description: The default netmask length for allocations
+  #   Type: Number    
+  # pMaxNetmaskLengthIPv4: 
+  #   Description: The maximum netmask length possible for CIDR allocations
+  #   Type: Number    
+  # pMinNetmaskLengthIPv4: 
+  #   Description: The minimum netmask length required for CIDR allocations
+  #   Type: Number 
+
+Resources:
+  rIPAM:
+    Type: AWS::EC2::IPAM
+    Properties: 
+      Description: Organization IPAM
+      OperatingRegions: 
+        - RegionName: !Select [0, !Ref pOperatingRegionList]
+        - RegionName: !Select [1, !Ref pOperatingRegionList]
+
+  rIPAMScope:
+    Type: AWS::EC2::IPAMScope
+    Properties: 
+      Description: Custom Scope for Private IP Addresses
+      IpamId: !Ref rIPAM
+      IpamScopeType: private
+
+  rIPAMTOPPoolIPv4:
+    Type: AWS::EC2::IPAMPool
+    Properties: 
+      AddressFamily: ipv4
+      Description: IPAM Pool for TOP pool 
+      IpamScopeId: !Ref rIPAMScope
+      ProvisionedCidrs: 
+        - Cidr: !Select [0, !Ref pMainPoolCIDRIPv4List]
+        # - Cidr: !Select [1, !Ref pMainPoolCIDRIPv4List]
+      Tags:
+        - Key: "Name"
+          Value: "TOP-LEVEL-POOL" 
+  
+  rIPAMPoolRegional1IPv4:
+    Type: AWS::EC2::IPAMPool
+    Properties: 
+      AddressFamily: ipv4
+      Description: IPAM Pool for First region 
+      IpamScopeId: !Ref rIPAMScope
+      Locale: !Select [0, !Ref pOperatingRegionList]
+      ProvisionedCidrs: 
+        - Cidr: !Select [0, !Ref pRegionalPool1CIDRIPv4List]
+        # - Cidr: !Select [0, !Ref pRegionalPool2CIDRIPv4List]
+      SourceIpamPoolId: !Ref rIPAMTOPPoolIPv4  
+      Tags:
+        - Key: "Name"
+          Value: !Select [0, !Ref pOperatingRegionList]
+  
+  rIPAMPoolRegional2IPv4:
+    Type: AWS::EC2::IPAMPool
+    Properties: 
+      AddressFamily: ipv4
+      Description: IPAM Pool for Second region 
+      IpamScopeId: !Ref rIPAMScope
+      Locale: !Select [1, !Ref pOperatingRegionList]
+      ProvisionedCidrs: 
+        - Cidr: !Select [1, !Ref pRegionalPool1CIDRIPv4List]
+        # - Cidr: !Select [1, !Ref pRegionalPool2CIDRIPv4List]
+      SourceIpamPoolId: !Ref rIPAMTOPPoolIPv4  
+      Tags:
+        - Key: "Name"
+          Value: !Select [1, !Ref pOperatingRegionList]
+
+  rIPAMPoolProductionIPv4Region1:
+    Type: AWS::EC2::IPAMPool
+    Properties: 
+      AddressFamily: ipv4
+      # AllocationDefaultNetmaskLength: !Ref pDefaultNetmaskLengthIPv4
+      # AllocationMaxNetmaskLength: !Ref pMaxNetmaskLengthIPv4
+      # AllocationMinNetmaskLength: !Ref pMinNetmaskLengthIPv4
+      AutoImport: yes
+      Description: IPAM Pool for Production Environment
+      IpamScopeId: !Ref rIPAMScope
+      Locale: !Select [0, !Ref pOperatingRegionList]
+      ProvisionedCidrs: 
+        - Cidr: !Select [0, !Ref pProductionPoolCIDRIPv4List]
+      SourceIpamPoolId: !Ref rIPAMPoolRegional1IPv4
+      Tags:
+        - Key: "Name"
+          Value: "Production Pool"
+  
+  rIPAMPoolDevelopmentIPv4Region1:
+    Type: AWS::EC2::IPAMPool
+    Properties: 
+      AddressFamily: ipv4
+      # AllocationDefaultNetmaskLength: !Ref pDefaultNetmaskLengthIPv4
+      # AllocationMaxNetmaskLength: !Ref pMaxNetmaskLengthIPv4
+      # AllocationMinNetmaskLength: !Ref pMinNetmaskLengthIPv4
+      AutoImport: yes
+      Description: IPAM Pool for Development Environment
+      IpamScopeId: !Ref rIPAMScope
+      Locale: !Select [0, !Ref pOperatingRegionList]
+      ProvisionedCidrs: 
+        - Cidr: !Select [0, !Ref pDevelopmentPoolCIDRIPv4List]
+      SourceIpamPoolId: !Ref rIPAMPoolRegional1IPv4
+      Tags:
+        - Key: "Name"
+          Value: "Development Pool"
+
+  rIPAMPoolSharedServicesIPv4Region1:
+    Type: AWS::EC2::IPAMPool
+    Properties: 
+      AddressFamily: ipv4
+      # AllocationDefaultNetmaskLength: !Ref pDefaultNetmaskLengthIPv4
+      # AllocationMaxNetmaskLength: !Ref pMaxNetmaskLengthIPv4
+      # AllocationMinNetmaskLength: !Ref pMinNetmaskLengthIPv4
+      AutoImport: yes
+      Description: IPAM Pool for SharedServices Environment
+      IpamScopeId: !Ref rIPAMScope
+      Locale: !Select [0, !Ref pOperatingRegionList]
+      ProvisionedCidrs: 
+        - Cidr: !Select [0, !Ref pSharedServicesPoolCIDRIPv4List]
+      SourceIpamPoolId: !Ref rIPAMPoolRegional1IPv4
+      Tags:
+        - Key: "Name"
+          Value: "SharedServices Pool"
+
+  rIPAMPoolProductionIPv4Region2:
+    Type: AWS::EC2::IPAMPool
+    Properties: 
+      AddressFamily: ipv4
+      # AllocationDefaultNetmaskLength: !Ref pDefaultNetmaskLengthIPv4
+      # AllocationMaxNetmaskLength: !Ref pMaxNetmaskLengthIPv4
+      # AllocationMinNetmaskLength: !Ref pMinNetmaskLengthIPv4
+      AutoImport: yes
+      Description: IPAM Pool for Production Environment
+      IpamScopeId: !Ref rIPAMScope
+      Locale: !Select [1, !Ref pOperatingRegionList]
+      ProvisionedCidrs: 
+        - Cidr: !Select [1, !Ref pProductionPoolCIDRIPv4List]
+      SourceIpamPoolId: !Ref rIPAMPoolRegional2IPv4
+      Tags:
+        - Key: "Name"
+          Value: "Production Pool"
+  
+  rIPAMPoolDevelopmentIPv4Region2:
+    Type: AWS::EC2::IPAMPool
+    Properties: 
+      AddressFamily: ipv4
+      # AllocationDefaultNetmaskLength: !Ref pDefaultNetmaskLengthIPv4
+      # AllocationMaxNetmaskLength: !Ref pMaxNetmaskLengthIPv4
+      # AllocationMinNetmaskLength: !Ref pMinNetmaskLengthIPv4
+      AutoImport: yes
+      Description: IPAM Pool for Development Environment
+      IpamScopeId: !Ref rIPAMScope
+      Locale: !Select [1, !Ref pOperatingRegionList]
+      ProvisionedCidrs: 
+        - Cidr: !Select [1, !Ref pDevelopmentPoolCIDRIPv4List]
+      SourceIpamPoolId: !Ref rIPAMPoolRegional2IPv4
+      Tags:
+        - Key: "Name"
+          Value: "Development Pool"
+
+  rIPAMPoolSharedServicesIPv4Region2:
+    Type: AWS::EC2::IPAMPool
+    Properties: 
+      AddressFamily: ipv4
+      # AllocationDefaultNetmaskLength: !Ref pDefaultNetmaskLengthIPv4
+      # AllocationMaxNetmaskLength: !Ref pMaxNetmaskLengthIPv4
+      # AllocationMinNetmaskLength: !Ref pMinNetmaskLengthIPv4
+      AutoImport: yes
+      Description: IPAM Pool for SharedServices Environment
+      IpamScopeId: !Ref rIPAMScope
+      Locale: !Select [1, !Ref pOperatingRegionList]
+      ProvisionedCidrs: 
+        - Cidr: !Select [1, !Ref pSharedServicesPoolCIDRIPv4List]
+      SourceIpamPoolId: !Ref rIPAMPoolRegional2IPv4
+      Tags:
+        - Key: "Name"
+          Value: "SharedServices Pool"
+      
+  rIPAMShareProductionIPv4Region1:
+    Type: "AWS::RAM::ResourceShare"
+    Properties:      
+      Name: "IPAM Share Production"
+      ResourceArns:
+        - !GetAtt rIPAMPoolProductionIPv4Region1.Arn
+      Principals:
+        - !Sub arn:aws:organizations::${pManagementAccountID}:ou/${pOrgId}/${pProdOrganizationOU}
+      PermissionArns: 
+        - arn:aws:ram::aws:permission/AWSRAMDefaultPermissionsIpamPool        
+      AllowExternalPrincipals: false
+      Tags:
+        - Key: "Name"
+          Value: "IPv4-Pool-Production"        
+
+  rIPAMShareDevelopmentIPv4Region1:
+    Type: "AWS::RAM::ResourceShare"
+    Properties:
+      Name: "IPAM Share Development"
+      ResourceArns:
+        -  !GetAtt rIPAMPoolDevelopmentIPv4Region1.Arn
+      Principals:
+        - !Sub arn:aws:organizations::${pManagementAccountID}:ou/${pOrgId}/${pDevOrganizationOU}
+      PermissionArns: 
+        - arn:aws:ram::aws:permission/AWSRAMDefaultPermissionsIpamPool        
+      AllowExternalPrincipals: false        
+      Tags:
+        - Key: "Name"
+          Value: "IPv4-Pool-Development"   
+
+  rIPAMShareSharedServicesIPv4Region1:
+    Type: "AWS::RAM::ResourceShare"
+    Properties:
+      Name: "IPAM Share SharedServices"
+      ResourceArns:
+        -  !GetAtt rIPAMPoolSharedServicesIPv4Region1.Arn
+      Principals:
+        - !Sub arn:aws:organizations::${pManagementAccountID}:ou/${pOrgId}/${pSharedservicesOrganizationOU}
+      PermissionArns: 
+        - arn:aws:ram::aws:permission/AWSRAMDefaultPermissionsIpamPool        
+      AllowExternalPrincipals: false        
+      Tags:
+        - Key: "Name"
+          Value: "IPv4-Pool-SharedServices"
+
+  rIPAMShareProductionIPv4Region2:
+    Type: "AWS::RAM::ResourceShare"
+    Properties:      
+      Name: "IPAM Share Production"
+      ResourceArns:
+        - !GetAtt rIPAMPoolProductionIPv4Region2.Arn
+      Principals:
+        - !Sub arn:aws:organizations::${pManagementAccountID}:ou/${pOrgId}/${pProdOrganizationOU}
+      PermissionArns: 
+        - arn:aws:ram::aws:permission/AWSRAMDefaultPermissionsIpamPool        
+      AllowExternalPrincipals: false
+      Tags:
+        - Key: "Name"
+          Value: "IPv4-Pool-Production"        
+
+  rIPAMShareDevelopmentIPv4Region2:
+    Type: "AWS::RAM::ResourceShare"
+    Properties:
+      Name: "IPAM Share Development"
+      ResourceArns:
+        -  !GetAtt rIPAMPoolDevelopmentIPv4Region2.Arn
+      Principals:
+        - !Sub arn:aws:organizations::${pManagementAccountID}:ou/${pOrgId}/${pDevOrganizationOU}
+      PermissionArns: 
+        - arn:aws:ram::aws:permission/AWSRAMDefaultPermissionsIpamPool        
+      AllowExternalPrincipals: false        
+      Tags:
+        - Key: "Name"
+          Value: "IPv4-Pool-Development"   
+
+  rIPAMShareSharedServicesIPv4Region2:
+    Type: "AWS::RAM::ResourceShare"
+    Properties:
+      Name: "IPAM Share SharedServices"
+      ResourceArns:
+        -  !GetAtt rIPAMPoolSharedServicesIPv4Region2.Arn
+      Principals:
+        - !Sub arn:aws:organizations::${pManagementAccountID}:ou/${pOrgId}/${pSharedservicesOrganizationOU}
+      PermissionArns: 
+        - arn:aws:ram::aws:permission/AWSRAMDefaultPermissionsIpamPool        
+      AllowExternalPrincipals: false        
+      Tags:
+        - Key: "Name"
+          Value: "IPv4-Pool-SharedServices"
+
+Outputs:
+  oLocalParameterPathforVPCID:
+    Value: !Ref pLocalParameterPathforVPCID
+  oIPPoolProductionIPv4Region1:
+    Description: IPAM Pool for Production Environment
+    Value: !Ref rIPAMPoolProductionIPv4Region1
+  oIPPoolDevelopmentIPv4Region1:
+    Description: IPAM Pool for Development Environment
+    Value: !Ref rIPAMPoolDevelopmentIPv4Region1
+  oIPPoolSharedServicesIPv4Region1:
+    Description: IPAM Pool for SharedServices Environment
+    Value: !Ref rIPAMPoolSharedServicesIPv4Region1
+  oIPPoolProductionIPv4Region2:
+    Description: IPAM Pool for Production Environment
+    Value: !Ref rIPAMPoolProductionIPv4Region2
+  oIPPoolDevelopmentIPv4Region2:
+    Description: IPAM Pool for Development Environment
+    Value: !Ref rIPAMPoolDevelopmentIPv4Region2
+  oIPPoolSharedServicesIPv4Region2:
+    Description: IPAM Pool for SharedServices Environment
+    Value: !Ref rIPAMPoolSharedServicesIPv4Region2
