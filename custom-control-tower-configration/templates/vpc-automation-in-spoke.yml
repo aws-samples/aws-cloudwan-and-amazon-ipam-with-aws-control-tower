@@ -1,0 +1,605 @@
+########################################################################################################################
+#  Any code, applications, scripts, templates, proofs of concept, documentation and other items provided by AWS under  #
+#  this SOW are "AWS Content," as defined in the Agreement, and are provided for illustration purposes only. All such  #
+#  AWS Content is provided solely at the option of AWS, and is subject to the terms of the Addendum and the Agreement. #
+#  Customer is solely responsible for using, deploying, testing, and supporting any code and applications provided by  #
+#  AWS under this SOW.                                                                                                 #
+########################################################################################################################
+# (c) 2019 Amazon Web Services, Inc. or its affiliates. All Rights Reserved. This AWS Content is provided subject to the terms of the AWS Customer
+# Agreement available at https://aws.amazon.com/agreement/ or other written agreement between Customer and Amazon Web Services, Inc.
+AWSTemplateFormatVersion: '2010-09-09'
+Metadata: # Metadata Section
+  AWS::CloudFormation::Interface:
+    ParameterGroups: # Parameter Groups
+    - Label: # Lambda Configuration
+        default: Configuration
+      Parameters: # Label Parameters
+      - pVPCSize
+
+Parameters:
+  pOrgId:
+    Description: Id of organization
+    Type: String
+  pLocalParameterPathforVPCID:
+    Type: String
+    Description: SSM Parameter Name for storing VPCID locally in the account
+    Default: '/org/member/local/cloudwan/vpcid'
+  pVPCSize: 
+    AllowedValues:
+      - "small"
+      - "medium"
+      - "large"
+    Default: "medium"
+    Description: "Select the netmask length of the VPC being deployed. VPC Size - small: /24, medium: /22 or large: /20"
+    Type: String
+  NetworkAccountID:
+    Description: Network Account ID
+    Type: String
+  ManagementAccountID:
+    Description: Network Account ID
+    Type: String
+  CfctRegion:
+    Description: region of cfct
+    Type: String
+    Default: "us-west-2"
+  pCoreNetworkArn:
+    Description: Core Network ARN
+    Type: String
+  pCoreNetworkId: 
+    Description: Core Network Id
+    Type: String
+  # pRemoteRegionalCidr:
+  #   Type: CommaDelimitedList
+  #   Description: Remote regional CIDR that will be connected to the CloudWAN
+
+Mappings: 
+  size:
+    small:  
+      vpccidr: 24
+      subnetcidr: 5
+    medium:
+      vpccidr: 22
+      subnetcidr: 6
+    large:
+      vpccidr: 20
+      subnetcidr: 8
+
+Resources:
+  # Create a new VPC for the example
+  IPAMID:
+    Type: Custom::DescribeIpamResourceid
+    Properties:
+      ServiceToken: !GetAtt  DescribeResourceId.Arn
+      Region: !Ref "AWS::Region"
+      Shared_Resource : "IpamPool"
+      Cfct_Region: !Ref CfctRegion
+      Environment: !GetAtt EnvironmentName.Data
+  
+  #### Get resourceid address
+  DescribeResourceIDExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - ec2:*
+                  - ram:ListResources
+                Resource: "*"
+
+  DescribeResourceId:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: "index.handler"
+      Role: !GetAtt
+        - DescribeResourceIDExecutionRole
+        - Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          import logging
+          import time
+          def get_id(region,shared_resource,cfct_region,environment):
+            print(f" getting resource id")
+            ippoolid = ''
+            if shared_resource == 'IpamPool':
+              ram = boto3.client('ram',region_name=cfct_region)
+              ec2= boto3.client('ec2',region_name=cfct_region)
+              ipam= ec2.describe_ipam_pools(Filters=[{'Name':'locale','Values':[region]}])
+              for i in ipam["IpamPools"]:
+                if i['Tags']:
+                  for value in i['Tags']:
+                     if environment in value['Value'] :
+                        ippoolid= i['IpamPoolId']
+                else:
+                  ippoolid= i['IpamPoolId']
+              return ippoolid
+          def handler(event, context):
+              logger = logging.getLogger()
+              logger.setLevel(logging.INFO)
+              responseData = {}
+              responseStatus = cfnresponse.FAILED
+              logger.info('Received event: {}'.format(json.dumps(event)))
+              if event["RequestType"] == "Delete":
+                  responseStatus = cfnresponse.SUCCESS
+                  cfnresponse.send(event, context, responseStatus, responseData)
+              if event["RequestType"] == "Update":
+                  responseStatus = cfnresponse.SUCCESS
+                  cfnresponse.send(event, context, responseStatus, responseData)
+              if event["RequestType"] == "Create":
+                  try:
+                      region= event["ResourceProperties"]["Region"]
+                      shared_resource =  event["ResourceProperties"]["Shared_Resource"]
+                      cfct_region = event["ResourceProperties"]["Cfct_Region"]
+                      environment =  event["ResourceProperties"]["Environment"]
+                  except Exception as e:
+                      logger.info('Input Id retrival failure: {}'.format(e))
+                  try:
+                      resource_id = get_id(region,shared_resource,cfct_region,environment)
+                      logger.info('Resource id {}'.format(resource_id))
+                      responseData['Data'] = resource_id
+                      responseStatus = cfnresponse.SUCCESS
+                  except Exception as e:
+                      logger.info('failure retrive id {}'.format(e))
+                  cfnresponse.send(event, context, responseStatus, responseData)
+      Runtime: python3.8
+      Timeout: 900
+  
+  EnvironmentName:
+    Type: Custom::GetEnvironmentName
+    Properties:
+      ServiceToken: !GetAtt  GetEnvironment.Arn
+      Account: !Ref "AWS::AccountId"
+      role_arn: !Sub "arn:aws:iam::${ManagementAccountID}:role/CrossAccountOrganization"
+
+  GetEnvironmentRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: "AssumeRoleInManagementAccount"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sts:AssumeRole"
+                Resource: !Sub "arn:aws:iam::${ManagementAccountID}:role/CrossAccountOrganization"
+
+  GetEnvironment:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt GetEnvironmentRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          import logging
+          import time
+          def get_id(account_id,role_arn):
+            try:
+              sts_client = boto3.client('sts')
+              assumed_role_object=sts_client.assume_role(RoleArn=role_arn,RoleSessionName="LambdaEnvironmentAccount")
+              credentials=assumed_role_object['Credentials']
+              list_ous=[]
+              print(f" getting resource id")
+              org = boto3.client('organizations',aws_access_key_id=credentials['AccessKeyId'],aws_secret_access_key=credentials['SecretAccessKey'],aws_session_token=credentials['SessionToken'])
+              roots = org.list_roots()["Roots"][0]
+              root_id = roots['Id']
+              result = org.list_children(ParentId =root_id, ChildType='ORGANIZATIONAL_UNIT')
+              child_ous=[]
+              for parent in result['Children'] :
+                  list_ous.append(parent['Id'])
+              for ou in list_ous:
+                  response = org.describe_organizational_unit(OrganizationalUnitId=ou)
+                  print(response['OrganizationalUnit']['Name'])
+                  result = org.list_children(ParentId =ou, ChildType='ORGANIZATIONAL_UNIT')
+                  if result['Children']:
+                      print(result['Children'])
+                      for child in result['Children']:
+                          child_ous.append(child['Id'])
+                      #print(child_ous)
+                      for childou in child_ous:
+                          account = org.list_accounts_for_parent(ParentId=childou)
+                          for id in account['Accounts']:
+                              #print(id['Id'])
+                              if id['Id'] == account_id:
+                                  response = org.describe_organizational_unit(OrganizationalUnitId=childou)
+                                  ou_name = response['OrganizationalUnit']['Name']
+                  else:
+                      account = org.list_accounts_for_parent(ParentId=ou)
+                      for id in account['Accounts']:
+                          #print(id['Id'])
+                          if id['Id'] == account_id:
+                              response = org.describe_organizational_unit(OrganizationalUnitId=ou)
+                              ou_name = response['OrganizationalUnit']['Name']
+              return(ou_name)
+            except Exception as e:
+                msg = "Unable to get value of SSM Parameter in Network account"
+                raise Exception(msg)          
+          def handler(event, context):
+              logger = logging.getLogger()
+              logger.setLevel(logging.INFO)
+              responseData = {}
+              responseStatus = cfnresponse.FAILED
+              logger.info('Received event: {}'.format(json.dumps(event)))
+              if event["RequestType"] == "Delete":
+                  responseStatus = cfnresponse.SUCCESS
+                  cfnresponse.send(event, context, responseStatus, responseData)
+              if event["RequestType"] == "Update":
+                  responseStatus = cfnresponse.SUCCESS
+                  cfnresponse.send(event, context, responseStatus, responseData)
+              if event["RequestType"] == "Create":
+                  try:
+                      account= event["ResourceProperties"]["Account"]
+                      role_arn = event["ResourceProperties"]["role_arn"]
+                  except Exception as e:
+                      logger.info('ip retrival failure: {}'.format(e))
+                  try:
+                      ou_name = get_id(account,role_arn)
+                      responseData['Data'] = ou_name
+                      responseStatus = cfnresponse.SUCCESS
+                  except Exception as e:
+                      logger.info('failure retrive id {}'.format(e))
+                  cfnresponse.send(event, context, responseStatus, responseData)
+
+  rVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      Ipv4IpamPoolId: !GetAtt IPAMID.Data
+      Ipv4NetmaskLength: !FindInMap [size, !Ref pVPCSize, vpccidr]
+      EnableDnsSupport:  true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+        - Key: environment
+          Value: !GetAtt EnvironmentName.Data
+
+  rSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref rVpc
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt rVpc.CidrBlock, 4, !FindInMap [size, !Ref pVPCSize, subnetcidr]]]
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+        - Key: environment
+          Value: !GetAtt EnvironmentName.Data
+
+  rSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref rVpc
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt rVpc.CidrBlock, 4, !FindInMap [size, !Ref pVPCSize, subnetcidr]]]
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+        - Key: environment
+          Value: !GetAtt EnvironmentName.Data
+
+
+  NetworkManagerVpcAttachment:
+    Type: "AWS::NetworkManager::VpcAttachment"
+    Properties:
+        CoreNetworkId: !Ref pCoreNetworkId
+        SubnetArns: 
+          - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${rSubnet1}"
+          - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${rSubnet2}"
+        VpcArn: !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${rVpc}"
+        Tags: 
+          - Key: "Segment"
+            Value: !GetAtt EnvironmentName.Data
+
+  rCloudWanRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: NetworkManagerVpcAttachment
+    Properties:
+      VpcId: !Ref rVpc
+      Tags:
+        - Key: "Name"
+          Value: "CloudWANAttachmentRouteTable"
+
+  rInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: 
+      Tags: 
+        - Key: Internet Gateway
+          Value: IGW
+
+  rAttachGatewayRegion1:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: rVpc
+      InternetGatewayId:
+        Ref: rInternetGateway
+
+  rRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref rCloudWanRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref rInternetGateway
+
+  rSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rCloudWanRouteTable
+      SubnetId: !Ref rSubnet1
+
+  rSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rCloudWanRouteTable
+      SubnetId: !Ref rSubnet2
+
+  rVpcIdSSMParameterCloudwan:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Name: !Ref pLocalParameterPathforVPCID
+      Type: String
+      Value: !Ref rVpc
+
+  GetSSMParameterValues:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt GetSSMParameterValuesRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          import logging
+          import time
+          def get_parameters(ssm_path,role_arn):
+            try:
+                sts_client = boto3.client('sts')
+                assumed_role_object=sts_client.assume_role(
+                RoleArn=role_arn,
+                RoleSessionName="LambdaAccount"
+                )
+                credentials=assumed_role_object['Credentials']
+                ssm = boto3.client('ssm', 
+                    aws_access_key_id=credentials['AccessKeyId'],
+                    aws_secret_access_key=credentials['SecretAccessKey'],
+                    aws_session_token=credentials['SessionToken'],
+                )
+                # Get SSM Pdarameter from the Network account
+                Ip_range = ssm.get_parameter(
+                    Name=ssm_path
+                )
+                return Ip_range['Parameter']['Value']
+            except Exception as e:
+                msg = "Unable to get value of SSM Parameter in Network account"
+                raise Exception(msg)          
+          def handler(event, context):
+              logger = logging.getLogger()
+              logger.setLevel(logging.INFO)
+              responseData = {}
+              responseStatus = cfnresponse.FAILED
+              logger.info('Received event: {}'.format(json.dumps(event)))
+              if event["RequestType"] == "Delete":
+                  responseStatus = cfnresponse.SUCCESS
+                  cfnresponse.send(event, context, responseStatus, responseData)
+              if event["RequestType"] == "Update":
+                  responseStatus = cfnresponse.SUCCESS
+                  cfnresponse.send(event, context, responseStatus, responseData)
+              if event["RequestType"] == "Create":
+                  try:
+                      Environment= event["ResourceProperties"]["Environment"]
+                      ssm_path =  event["ResourceProperties"]["ssm_path"] + Environment
+                      role_arn = event["ResourceProperties"]["role_arn"]
+                  except Exception as e:
+                      logger.info('parameters retrival failure: {}'.format(e))
+                  try:
+                      ip_range = get_parameters(ssm_path,role_arn)
+                      responseData['Data'] = ip_range
+                      responseStatus = cfnresponse.SUCCESS
+                  except Exception as e:
+                      logger.info('failure retrive id {}'.format(e))
+                  cfnresponse.send(event, context, responseStatus, responseData)
+      
+  GetSSMParameterValuesRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: "AssumeRoleInManagementAccount"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sts:AssumeRole"
+                Resource: !Sub "arn:aws:iam::${NetworkAccountID}:role/CrossAccountSSMparameter" # This role needs to be created already in the network account
+
+
+  GetSSMParametersValues:
+    Type: Custom::GetSSMParameterValues
+    Version: 0.1
+    Properties:
+      ServiceToken: !GetAtt GetSSMParameterValues.Arn
+      Environment: !GetAtt EnvironmentName.Data
+      ssm_path: '/networking/cloudwan/'
+      role_arn: !Sub "arn:aws:iam::${NetworkAccountID}:role/CrossAccountSSMparameter"
+
+  rIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonVPCFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+  rCustomUpdateRoute:
+    Type: Custom::ReplaceRoute
+    Version: '1.0'
+    Properties:
+      ServiceToken: !GetAtt "rLambdaReplaceRoute.Arn"
+      dest_cidr_block: !GetAtt GetSSMParametersValues.Data
+      core_network_arn:
+        Ref: pCoreNetworkArn
+      routetable_id:
+        Ref: rCloudWanRouteTable
+
+  rLambdaReplaceRoute:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt "rIamRole.Arn"
+      Code:
+        ZipFile:
+          !Sub |
+          import logging
+          import boto3, sys
+          import cfnresponse
+          import json
+          import os
+          from botocore.exceptions import ClientError
+          import urllib.request
+          ec2_client = boto3.client('ec2')
+          LOGGER=logging.getLogger()
+          LOGGER.setLevel(logging.INFO)
+          def lambda_handler(event, context):
+            LOGGER.info(event)
+            LOGGER.info(context)
+            responseStatus = 'SUCCESS'
+            responseData = {}
+            try:
+              ip_range = event['ResourceProperties']['dest_cidr_block']
+              dest_cidr_block = ip_range.split(',')
+              print(dest_cidr_block)
+              core_network_arn = event['ResourceProperties']['core_network_arn']
+              routetable_id = event['ResourceProperties'].get('routetable_id')
+              
+              if event['RequestType'] == 'Create':  
+                for ip in dest_cidr_block:
+                  ec2_response_data = ec2_client.create_route(DestinationCidrBlock=ip,CoreNetworkArn=core_network_arn,RouteTableId=routetable_id)
+                responseStatus = 'SUCCESS'
+                responseData = {}
+                sendResponse(event, context, responseStatus, responseData)
+              
+              if event['RequestType'] == 'Delete':
+                response_data = {}
+                responseStatus = 'SUCCESS'
+                responseData = {}
+                sendResponse(event, context, responseStatus, responseData)
+              
+              if event['RequestType'] == 'Update':   
+                exist_dest_cidr =[]
+                print (routetable_id)
+                ec2_route_entry = ec2_client.describe_route_tables(RouteTableIds=[routetable_id])
+                for route_table in ec2_route_entry['RouteTables']:
+                  for route in route_table['Routes']:
+                    print (route)
+                    if "CoreNetworkArn" in route:
+                      exist_dest_cidr.append(route['DestinationCidrBlock'])
+                print(exist_dest_cidr)             
+                create_cidr = list(set(dest_cidr_block) - set(exist_dest_cidr))
+                delete_cidr = list(set(exist_dest_cidr) - set(dest_cidr_block)) 
+                for ip in create_cidr:
+                  ec2_response_data = ec2_client.create_route(DestinationCidrBlock=ip,CoreNetworkArn=core_network_arn,RouteTableId=routetable_id)
+                for ip in delete_cidr:
+                  ec2_response_data = ec2_client.delete_route(DestinationCidrBlock=ip,RouteTableId=routetable_id)
+                responseStatus = 'SUCCESS'
+                responseData = {}
+                sendResponse(event, context, responseStatus, responseData)
+
+            except Exception as error:
+              LOGGER.error(f"The error due to {error}")
+              responseStatus = 'FAILED'
+              responseData = {}
+              sendResponse(event, context, responseStatus, responseData)
+              raise error
+
+          def sendResponse(event, context, responseStatus, responseData):
+            data = json.dumps({
+              'Status': responseStatus,
+              'PhysicalResourceId': context.log_stream_name,
+              'StackId': event['StackId'],
+              'RequestId': event['RequestId'],
+              'LogicalResourceId': event['LogicalResourceId'],
+              'Data': responseData
+            })
+            print(data)
+            opener = urllib.request.build_opener(urllib.request.HTTPHandler)
+            request = urllib.request.Request(url=event['ResponseURL'], data=data.encode('utf-8'))
+            request.add_header('Content-Type', '')
+            request.get_method = lambda: 'PUT'
+            url = opener.open(request)
+            print('HTTP Request Sent')
+            return
+
+      Runtime: python3.6
+      Timeout: 20
+
+Outputs:
+  ovpcid:
+    Value: !Ref rVpc

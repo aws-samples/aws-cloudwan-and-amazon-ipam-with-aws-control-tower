@@ -1,0 +1,148 @@
+########################################################################################################################
+#  Any code, applications, scripts, templates, proofs of concept, documentation and other items provided by AWS under  #
+#  this SOW are "AWS Content," as defined in the Agreement, and are provided for illustration purposes only. All such  #
+#  AWS Content is provided solely at the option of AWS, and is subject to the terms of the Addendum and the Agreement. #
+#  Customer is solely responsible for using, deploying, testing, and supporting any code and applications provided by  #
+#  AWS under this SOW.                                                                                                 #
+########################################################################################################################
+# Copyright 2016-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
+# 
+# http://aws.amazon.com/apache2.0/
+# 
+# or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+Parameters:
+  pOrgId:
+    Description: Id of organization
+    Type: String
+  pOrganizationsArn:
+    Description: ARN of Organization
+    Type: String
+
+Resources:
+  rGlobalNet:
+    Type: AWS::NetworkManager::GlobalNetwork
+    Properties:
+      Description: CloudWAN Global Network
+      Tags:
+      - Key: Name
+        Value: cloudwan-global-network
+
+  rCoreNetwork:
+    Type: AWS::NetworkManager::CoreNetwork
+    Properties:
+      GlobalNetworkId:
+        Fn::GetAtt:
+        - rGlobalNet
+        - Id
+      PolicyDocument:
+        version: '2021.12'
+        core-network-configuration:
+          vpn-ecmp-support: false
+          asn-ranges:
+            - 64512-64555
+          edge-locations:
+            - location: us-east-1
+            - location: eu-west-1
+        segments:
+          - name: shared
+            description: shared segment
+            require-attachment-acceptance: true
+          - name: development
+            description: development segment
+            edge-locations:
+              - us-east-1
+              - eu-west-1
+            require-attachment-acceptance: true
+          - name: production
+            description: production segment
+            edge-locations:
+              - us-east-1
+              - eu-west-1
+            require-attachment-acceptance: true
+        segment-actions:
+          - action: share
+            mode: attachment-route
+            segment: shared
+            share-with: '*'
+        attachment-policies:
+          - rule-number: 100
+            condition-logic: or
+            conditions:
+              - type: tag-value
+                operator: equals
+                key: segment
+                value: shared
+            action:
+              association-method: constant
+              segment: shared
+          - rule-number: 200
+            condition-logic: or
+            conditions:
+              - type: tag-value
+                operator: equals
+                key: segment
+                value: development
+            action:
+              association-method: constant
+              segment: development
+          - rule-number: 300
+            condition-logic: or
+            conditions:
+              - type: tag-value
+                operator: equals
+                key: segment
+                value: production
+            action:
+              association-method: constant
+              segment: production
+     
+  
+  rCloudwanResourceShare:
+    Type: "AWS::RAM::ResourceShare"
+    Properties:
+      Name: "CoreNetworkResourceShare"
+      ResourceArns: 
+      - !GetAtt rCoreNetwork.CoreNetworkArn
+      Principals:
+      - !Ref pOrganizationsArn
+  
+  rSmsparameterRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: "CrossAccountSSMparameter"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: "*"
+          Action:
+          - 'sts:AssumeRole'
+          Condition:
+            StringEquals:
+                "aws:PrincipalOrgID": !Ref pOrgId
+      Path: '/'
+      Policies:
+      - PolicyName: ssmparameterrolecrossaccount
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'ssm:GetParameters'
+            - 'ssm:GetParameter'
+            Resource: '*'
+  
+
+Outputs:
+  oCoreNetworkId: 
+    Description: CloudWAN Core Network Id
+    Value: !Ref rCoreNetwork
+  oCoreNetworkArn: 
+    Description: CloudWAN Core Network Arn
+    Value:
+      Fn::GetAtt:
+      - rCoreNetwork
+      - CoreNetworkArn

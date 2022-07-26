@@ -1,0 +1,46 @@
+########################################################################################################################
+#  Any code, applications, scripts, templates, proofs of concept, documentation and other items provided by AWS under  #
+#  this SOW are "AWS Content," as defined in the Agreement, and are provided for illustration purposes only. All such  #
+#  AWS Content is provided solely at the option of AWS, and is subject to the terms of the Addendum and the Agreement. #
+#  Customer is solely responsible for using, deploying, testing, and supporting any code and applications provided by  #
+#  AWS under this SOW.                                                                                                 #
+########################################################################################################################
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Prepares the Management Account for adding custom solutions
+
+Parameters:
+  pRemoteRegionalCidrDEV:
+    Type: String
+    Description: Remote regional CIDR that will be connected to the CloudWAN
+  pRemoteRegionalCidrProd:
+    Type: String
+    Description: Remote regional CIDR that will be connected to the CloudWAN
+  pRemoteRegionalCidrSharedService:
+    Type: String
+    Description: Remote regional CIDR that will be connected to the CloudWAN
+
+Resources:
+
+  DevelopmentSSMParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /networking/cloudwan/Development
+      Type: String
+      Value: !Ref pRemoteRegionalCidrDEV
+
+  ProdSSMParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /networking/cloudwan/Production
+      Type: String
+      Value: !Ref pRemoteRegionalCidrProd
+  
+  SharedServiceSSMParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /networking/cloudwan/SharedServices
+      Type: String
+      Value: !Ref pRemoteRegionalCidrSharedService
+
+  
