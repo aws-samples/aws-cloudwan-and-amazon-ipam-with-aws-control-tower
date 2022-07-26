@@ -27,7 +27,7 @@ The deployment of the solution consists of three sections:
 - Section-2: Add the packaged code for AWS Control Tower customizations that sets up IPAM, Cloud WAN core network, and segments in the Network Hub account.
 - Section-3: Add the spoke automations required to provision the VPCs leveraging CIDRs assigned from IPAM and connected globally using the Cloud WAN core network.
 
-Please refer to [blog](https://aws.amazon.com/blogs/networking-and-content-delivery/ip-address-management-for-aws-control-tower/) for further details.
+Please refer to [blog](https://aws.amazon.com/blogs/networking-and-content-delivery/aws-cloudwan-and-amazon-ipam-with-aws-control-tower-customizations/) for further details.
 
 
 ## Author 
