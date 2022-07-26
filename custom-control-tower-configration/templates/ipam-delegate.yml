@@ -1,1 +1,100 @@
+# License: Copyright 2021 Amazon Web Services, Inc. or its affiliates.
+# All Rights Reserved.
 
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# A copy of the License is located at
+#    http://aws.amazon.com/apache2.0/
+# or in the "license" file accompanying this file.
+
+# This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+# CONDITIONS OF ANY KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IPAM Delegation CloudFormation
+
+Parameters:
+
+  AccountIPAM:
+    Description: NetworkHub Account ID
+    Type: String
+
+Resources:
+
+  IPAM:
+    Type: 'Custom::IPAM'
+    Version: '1.0'
+    Properties:
+      accountid: !Ref AccountIPAM
+      ServiceToken: !GetAtt IPAMLambdaDelegate.Arn
+
+  IPAMLambdaRoleDelegate:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: ipampolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:EnableIpamOrganizationAdminAccount'
+                  - 'organizations:RegisterDelegatedAdministrator'
+                  - 'organizations:EnableAWSServiceAccess'
+                  - 'iam:CreateServiceLinkedRole'
+                Resource: '*'
+
+  IPAMLambdaDelegate:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+          import json,boto3
+          import cfnresponse
+          from botocore.exceptions import ClientError
+
+          def handler(event, context):
+            print('this is the event ' + json.dumps(event))
+            StackName = event['StackId']
+            LogicalResourceId = event['LogicalResourceId']
+            UniqueId = event['RequestId']
+            print("Boto3 version: " + boto3.__version__)
+            print("Parameters:\n" + (event['ResourceProperties']['accountid']) )
+            props = event['ResourceProperties']
+
+            client = boto3.client('ec2')
+
+            if (event['RequestType'] == 'Create' or event['RequestType'] == 'Update'):
+              try: 
+                response = client.enable_ipam_organization_admin_account(DryRun = False, DelegatedAdminAccountId = (event['ResourceProperties']['accountid']))
+                print(response)
+
+                if response['Success'] == True:
+                  print("IPAM configured")
+                  print("Respond: SUCCESS")
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                else:
+                  print("Respond: FAILED")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+              except Exception as ex:
+                print("failed executing requests.put(..): " + str(ex))
+                cfnresponse.send(event, context, cfnresponse.FAILED, {})
+            else:
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt 'IPAMLambdaRoleDelegate.Arn'
+      Runtime: 'python3.8'
+      Timeout: 60
