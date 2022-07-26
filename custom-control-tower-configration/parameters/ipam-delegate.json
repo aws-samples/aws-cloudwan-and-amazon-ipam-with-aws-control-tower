@@ -1,1 +1,7 @@
-
+[
+    {
+      "ParameterKey": "AccountIPAM",
+      "ParameterValue": "$[alfred_ssm_/org/core/NetworkHubAccountId]"
+    }
+  ]
+  
