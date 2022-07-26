@@ -1,0 +1,34 @@
+[
+  {
+    "ParameterKey": "pOrgId",
+    "ParameterValue": "$[alfred_ssm_/org/core/OrganizationID]"
+  },
+  {
+    "ParameterKey": "pLocalParameterPathforVPCID",
+    "ParameterValue": "$[alfred_ssm_/org/sharedservice/networking/LocalVPCIdPath]"
+  },
+  {
+    "ParameterKey": "pVPCSize",
+    "ParameterValue": "large"
+  },
+  {
+    "ParameterKey": "NetworkAccountID",
+    "ParameterValue": "/org/sharedservice/networking/NetworkHubAccount"
+  },
+  {
+    "ParameterKey": "ManagementAccountID",
+    "ParameterValue": "org/core/ManagementAccountId"
+  },
+  {
+    "ParameterKey": "CfctRegion",
+    "ParameterValue": "us-east-1"
+  },
+  {
+    "ParameterKey": "pCoreNetworkArn",
+    "ParameterValue": "$[alfred_ssm_/org/sharedservice/networking/CoreNetworkArn]"
+  },
+  {
+    "ParameterKey": "pCoreNetworkId",
+    "ParameterValue": "$[alfred_ssm_/org/sharedservice/networking/CoreNetworkId]"
+  }
+]

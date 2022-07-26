@@ -1,0 +1,14 @@
+[
+    {
+      "ParameterKey": "pRemoteRegionalCidrDEV",
+      "ParameterValue": "10.0.0.0/8,172.168.0.0/18"
+    },
+    {
+      "ParameterKey": "pRemoteRegionalCidrProd",
+      "ParameterValue": "10.0.0.0/8"
+    },
+    {
+      "ParameterKey": "pRemoteRegionalCidrSharedService",
+      "ParameterValue": "172.168.0.0/18"
+    }
+]

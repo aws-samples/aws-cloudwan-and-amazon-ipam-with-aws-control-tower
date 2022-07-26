@@ -1,0 +1,10 @@
+[
+    {
+      "ParameterKey": "pOrgId",
+      "ParameterValue": "$[alfred_ssm_/org/core/OrganizationID]"
+    },
+    {
+      "ParameterKey": "pOrganizationsArn",
+      "ParameterValue": "$[alfred_ssm_/org/core/OrganizationsArn]"
+    }
+]

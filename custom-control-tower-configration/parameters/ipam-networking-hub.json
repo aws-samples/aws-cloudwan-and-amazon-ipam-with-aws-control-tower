@@ -1,0 +1,38 @@
+[
+    {
+      "ParameterKey": "pOrgId",
+      "ParameterValue": "$[alfred_ssm_/org/core/OrganizationID]"
+    },
+    {
+      "ParameterKey": "pLocalParameterPathforVPCID",
+      "ParameterValue": "/org/member/local/vpcid"
+    },
+    {
+      "ParameterKey": "pManagementAccountID",
+      "ParameterValue": "$[alfred_ssm_/org/core/ManagementAccountId]"
+    },
+    {
+      "ParameterKey": "pOperatingRegionList",
+      "ParameterValue": "us-east-1,eu-west-1"
+    },
+    {
+      "ParameterKey": "pMainPoolCIDRIPv4List",
+      "ParameterValue": "10.0.0.0/8"
+    },
+    {
+      "ParameterKey": "pRegionalPool1CIDRIPv4List",
+      "ParameterValue": "10.0.0.0/16,10.1.0.0/16"
+    },
+    {
+      "ParameterKey": "pProductionPoolCIDRIPv4List",
+      "ParameterValue": "10.0.64.0/18,10.1.64.0/18"
+    },
+    {
+      "ParameterKey": "pDevelopmentPoolCIDRIPv4List",
+      "ParameterValue": "10.0.0.0/18,10.1.0.0/18"
+    },
+    {
+      "ParameterKey": "pSharedServicesPoolCIDRIPv4List",
+      "ParameterValue": "10.0.128.0/18,10.1.128.0/18"
+    }
+]
