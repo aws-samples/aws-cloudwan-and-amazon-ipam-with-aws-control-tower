@@ -597,7 +597,7 @@ Resources:
             print('HTTP Request Sent')
             return
 
-      Runtime: python3.6
+      Runtime: python3.9
       Timeout: 20
 
 Outputs:
