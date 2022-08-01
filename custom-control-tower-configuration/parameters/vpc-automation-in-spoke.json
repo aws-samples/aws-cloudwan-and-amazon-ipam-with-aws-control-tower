@@ -13,11 +13,11 @@
   },
   {
     "ParameterKey": "NetworkAccountID",
-    "ParameterValue": "/org/sharedservice/networking/NetworkHubAccount"
+    "ParameterValue": "$[alfred_ssm_/org/core/NetworkHubAccountId]"
   },
   {
     "ParameterKey": "ManagementAccountID",
-    "ParameterValue": "org/core/ManagementAccountId"
+    "ParameterValue": "$[alfred_ssm_/org/core/ManagementAccountID]"
   },
   {
     "ParameterKey": "CfctRegion",
