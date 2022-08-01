@@ -70,7 +70,7 @@ Parameters:
   NameforSSMParameterforNetworkHubAccountId:
     Type: String
     Description: Name of the SSM Parameter under which the name of NetworkHub account will be stored
-    Default: /org/sharedservice/networking/NetworkHubAccount
+    Default: /org/core/NetworkHubAccountId
   NameforSSMParameterforCommonServicesAccountId:
     Type: String
     Description: Name of the SSM Parameter under which the name of CommonServices account will be stored
